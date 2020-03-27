@@ -19,11 +19,13 @@
 package com.teiid.firestore.translator;
 
 
+import com.google.cloud.firestore.DocumentReference;
+import com.google.cloud.firestore.Query;
 import com.teiid.firestore.connection.FirestoreConnection;
-import org.teiid.language.DerivedColumn;
+import org.teiid.language.Comparison;
+import org.teiid.language.Condition;
+import org.teiid.language.NamedTable;
 import org.teiid.language.Select;
-import org.teiid.logging.LogConstants;
-import org.teiid.logging.LogManager;
 import org.teiid.metadata.RuntimeMetadata;
 import org.teiid.translator.DataNotAvailableException;
 import org.teiid.translator.ExecutionContext;
@@ -33,20 +35,21 @@ import org.teiid.translator.TranslatorException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 
 /**
  * Represents the execution of a command.
  */
 public class FirestoreExecution implements ResultSetExecution {
+    private Select command;
     private ExecutionContext executionContext;
     private RuntimeMetadata metadata;
     private FirestoreConnection connection;
 
     // Execution state
-    Iterator<List<?>> results;
-    int[] neededColumns;
-    private Select command;
+    Iterator<DocumentReference> results;
+    List<String> neededFields;
 
     public FirestoreExecution(Select query) {
         this.command = query;
@@ -61,10 +64,18 @@ public class FirestoreExecution implements ResultSetExecution {
 
     @Override
     public void execute() throws TranslatorException {
-        List<DerivedColumn> derivedColumns = command.getDerivedColumns();
-        derivedColumns.forEach(c -> {
-            c.getAlias();
-        });
+        String collectionName = ((NamedTable) command.getFrom().get(0)).getMetadataObject().getNameInSource();
+        Query query = connection.collection(collectionName);
+        Condition where = command.getWhere();
+        if (where != null) {
+            if (where instanceof Comparison) {
+                Comparison comparison = (Comparison) where;
+                switch (comparison.getOperator().name()) {
+//                    case Comparison.Operator.EQ.toString() -> collection.whereEqualTo(comparison.getLeftExpression(), comparison.getRightExpression())
+                }
+            }
+        }
+//        results = collection.listDocuments().iterator();
 //        LogManager.logDetail(LogConstants.CTX_CONNECTOR, FirestorePlugin.UTIL.getString("execute_query", new Object[] { "Firestore", command })); //$NON-NLS-1$
     }
 
@@ -72,22 +83,20 @@ public class FirestoreExecution implements ResultSetExecution {
     @Override
     public List<?> next() throws TranslatorException, DataNotAvailableException {
         if (results.hasNext()) {
-            return projectRow(results.next(), neededColumns);
+            return documentFields(results.next());
         }
         return null;
     }
 
-    /**
-     * @param row
-     * @param neededColumns
-     */
-    static List<Object> projectRow(List<?> row, int[] neededColumns) {
-        List<Object> output = new ArrayList<Object>(neededColumns.length);
-
-        for (int i = 0; i < neededColumns.length; i++) {
-            output.add(row.get(neededColumns[i] - 1));
+    private List<Object> documentFields(DocumentReference document) throws TranslatorException {
+        List<Object> output = new ArrayList<>(neededFields.size());
+        for (String neededField : neededFields) {
+            try {
+                output.add(document.get().get().get(neededField));
+            } catch (InterruptedException | ExecutionException e) {
+                throw new TranslatorException(e);
+            }
         }
-
         return output;
     }
 

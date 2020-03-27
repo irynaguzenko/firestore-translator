@@ -1,9 +1,9 @@
 package com.teiid.firestore.connection;
 
-import com.google.cloud.firestore.DocumentReference;
+import com.google.cloud.firestore.CollectionReference;
 import org.teiid.resource.api.Connection;
 
 
 public interface FirestoreConnection extends Connection {
-    DocumentReference document(String documentName);
+    CollectionReference collection(String documentName);
 }

@@ -1,6 +1,6 @@
 package com.teiid.firestore.connection;
 
-import com.google.cloud.firestore.DocumentReference;
+import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.Firestore;
 import org.teiid.spring.data.BaseConnection;
 
@@ -12,8 +12,8 @@ public class FirestoreConnectionImpl extends BaseConnection implements Firestore
     }
 
     @Override
-    public DocumentReference document(String documentName) {
-        return firestore.document(documentName);
+    public CollectionReference collection(String collectionName) {
+        return firestore.collection(collectionName);
     }
 
     @Override
