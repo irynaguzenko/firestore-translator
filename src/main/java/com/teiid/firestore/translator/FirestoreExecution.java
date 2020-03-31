@@ -19,23 +19,25 @@
 package com.teiid.firestore.translator;
 
 
-import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.Query;
+import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.teiid.firestore.connection.FirestoreConnection;
-import org.teiid.language.Comparison;
-import org.teiid.language.Condition;
-import org.teiid.language.NamedTable;
-import org.teiid.language.Select;
-import org.teiid.metadata.RuntimeMetadata;
+import org.apache.commons.lang3.tuple.Pair;
+import org.teiid.language.*;
 import org.teiid.translator.DataNotAvailableException;
-import org.teiid.translator.ExecutionContext;
 import org.teiid.translator.ResultSetExecution;
 import org.teiid.translator.TranslatorException;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
+import java.util.function.BiFunction;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static org.teiid.language.Comparison.Operator.*;
 
 
 /**
@@ -43,70 +45,89 @@ import java.util.concurrent.ExecutionException;
  */
 public class FirestoreExecution implements ResultSetExecution {
     private Select command;
-    private ExecutionContext executionContext;
-    private RuntimeMetadata metadata;
     private FirestoreConnection connection;
+    private static final Map<Comparison.Operator, BiFunction<Query, Pair<String, Object>, Query>> comparisons = Map.of(
+            EQ, (q, p) -> q.whereEqualTo(p.getLeft(), p.getRight()),
+            NE, (q, p) -> q.whereGreaterThan(p.getLeft(), p.getRight()).whereLessThan(p.getLeft(), p.getRight()),
+            LT, (q, p) -> q.whereLessThan(p.getLeft(), p.getRight()),
+            LE, (q, p) -> q.whereLessThanOrEqualTo(p.getLeft(), p.getRight()),
+            GT, (q, p) -> q.whereGreaterThan(p.getLeft(), p.getRight()),
+            GE, (q, p) -> q.whereGreaterThanOrEqualTo(p.getLeft(), p.getRight())
+    );
+    private Iterator<QueryDocumentSnapshot> results;
+    private String[] fields;
 
-    // Execution state
-    Iterator<DocumentReference> results;
-    List<String> neededFields;
-
-    public FirestoreExecution(Select query) {
+    FirestoreExecution(Select query, FirestoreConnection firestoreConnection) {
         this.command = query;
-    }
-
-    public FirestoreExecution(Select query, ExecutionContext executionContext, RuntimeMetadata metadata, FirestoreConnection firestoreConnection) {
-        this.command = query;
-        this.executionContext = executionContext;
-        this.metadata = metadata;
         this.connection = firestoreConnection;
+        this.fields = fields();
     }
 
     @Override
     public void execute() throws TranslatorException {
-        String collectionName = ((NamedTable) command.getFrom().get(0)).getMetadataObject().getNameInSource();
-        Query query = connection.collection(collectionName);
+        String collectionName = nameInSource((MetadataReference) command.getFrom().get(0));
+        Query query = connection.collection(collectionName).select(fields);
+
         Condition where = command.getWhere();
         if (where != null) {
-            if (where instanceof Comparison) {
-                Comparison comparison = (Comparison) where;
-                switch (comparison.getOperator().name()) {
-//                    case Comparison.Operator.EQ.toString() -> collection.whereEqualTo(comparison.getLeftExpression(), comparison.getRightExpression())
-                }
-            }
+            query = processWhere(query, where);
         }
-//        results = collection.listDocuments().iterator();
-//        LogManager.logDetail(LogConstants.CTX_CONNECTOR, FirestorePlugin.UTIL.getString("execute_query", new Object[] { "Firestore", command })); //$NON-NLS-1$
+
+        try {
+            results = Objects.requireNonNull(query).get().get().getDocuments().iterator();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new TranslatorException(e.getMessage());
+        }
     }
 
-
-    @Override
-    public List<?> next() throws TranslatorException, DataNotAvailableException {
-        if (results.hasNext()) {
-            return documentFields(results.next());
+    private Query processWhere(Query query, Condition where) throws TranslatorException {
+        if (where instanceof AndOr) {
+            AndOr andOr = (AndOr) where;
+            switch (andOr.getOperator()) {
+                case AND:
+                    return processWhere(processWhere(query, andOr.getLeftCondition()), andOr.getRightCondition());
+                case OR:
+                    throw new TranslatorException("OR is not supported");
+            }
+        } else if (where instanceof Comparison) {
+            Comparison comparison = (Comparison) where;
+            String leftExpression = nameInSource((MetadataReference) comparison.getLeftExpression());
+            Object rightExpression = ((Literal) comparison.getRightExpression()).getValue();
+            Comparison.Operator operator = valueOf(comparison.getOperator().name());
+            return comparisons.get(operator).apply(query, Pair.of(leftExpression, rightExpression));
         }
         return null;
     }
 
-    private List<Object> documentFields(DocumentReference document) throws TranslatorException {
-        List<Object> output = new ArrayList<>(neededFields.size());
-        for (String neededField : neededFields) {
-            try {
-                output.add(document.get().get().get(neededField));
-            } catch (InterruptedException | ExecutionException e) {
-                throw new TranslatorException(e);
-            }
+    @Override
+    public List<?> next() throws DataNotAvailableException {
+        if (results != null && results.hasNext()) {
+            QueryDocumentSnapshot next = results.next();
+            return Stream.of(fields).map(next::get).collect(Collectors.toList());
         }
-        return output;
+        return null;
     }
 
     @Override
     public void close() {
-//        LogManager.logDetail(LogConstants.CTX_CONNECTOR, FirestorePlugin.UTIL.getString("close_query")); //$NON-NLS-1$
+        fields = null;
+        results = null;
     }
 
     @Override
-    public void cancel() throws TranslatorException {
-//        LogManager.logDetail(LogConstants.CTX_CONNECTOR, FirestorePlugin.UTIL.getString("cancel_query")); //$NON-NLS-1$
+    public void cancel() {
+        fields = null;
+        results = null;
+    }
+
+    private String nameInSource(MetadataReference reference) {
+        return reference.getMetadataObject().getNameInSource();
+    }
+
+    private String[] fields() {
+        return command.getDerivedColumns().stream().map(derivedColumn -> {
+            ColumnReference column = (ColumnReference) derivedColumn.getExpression();
+            return column.getMetadataObject().getNameInSource();
+        }).toArray(String[]::new);
     }
 }

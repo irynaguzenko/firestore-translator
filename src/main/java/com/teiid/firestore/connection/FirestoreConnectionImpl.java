@@ -1,6 +1,7 @@
 package com.teiid.firestore.connection;
 
 import com.google.cloud.firestore.CollectionReference;
+import com.google.cloud.firestore.FieldPath;
 import com.google.cloud.firestore.Firestore;
 import org.teiid.spring.data.BaseConnection;
 

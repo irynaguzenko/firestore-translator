@@ -21,7 +21,6 @@ package com.teiid.firestore.translator;
 import com.teiid.firestore.connection.FirestoreConnection;
 import org.teiid.language.QueryExpression;
 import org.teiid.language.Select;
-import org.teiid.metadata.MetadataFactory;
 import org.teiid.metadata.RuntimeMetadata;
 import org.teiid.translator.*;
 
@@ -41,10 +40,14 @@ public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactor
 
     @Override
     public ResultSetExecution createResultSetExecution(QueryExpression command, ExecutionContext executionContext, RuntimeMetadata metadata, FirestoreConnection connectionFactory) {
-        return new FirestoreExecution((Select) command, executionContext, metadata, connectionFactory);
+        return new FirestoreExecution((Select) command, connectionFactory);
     }
 
     public boolean supportsCompareCriteriaEquals() {
+        return true;
+    }
+
+    public boolean supportsCompareCriteriaOrdered() {
         return true;
     }
 
@@ -58,12 +61,7 @@ public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactor
     }
 
     @Override
-    public void getMetadata(MetadataFactory metadataFactory, FirestoreConnection connection) throws TranslatorException {
-    }
-
-    @Override
     public boolean supportsOnlyLiteralComparison() {
         return true;
     }
-
 }

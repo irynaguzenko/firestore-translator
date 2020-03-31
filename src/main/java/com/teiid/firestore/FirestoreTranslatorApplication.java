@@ -1,6 +1,5 @@
 package com.teiid.firestore;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -24,7 +23,8 @@ public class FirestoreTranslatorApplication implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        List<Map<String, Object>> list = jdbcTemplate.queryForList("SELECT country_name FROM CountriesT WHERE country_name = 'Spain' and country_area < 1000 ");
+//        List<Map<String, Object>> list = jdbcTemplate.queryForList("SELECT country_name FROM CountriesT WHERE country_name = 'Spain' AND country_area >= 505.99 AND country_area < 1000");
+        List<Map<String, Object>> list = jdbcTemplate.queryForList("SELECT country_name FROM CountriesT WHERE irreligious > 20");
         System.out.println(list);
     }
 }

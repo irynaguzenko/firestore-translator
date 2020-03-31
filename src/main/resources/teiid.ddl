@@ -8,6 +8,7 @@ CREATE SCHEMA basicSchema SERVER firestoreConnectionFactory;
 SET SCHEMA basicSchema;
 
 CREATE FOREIGN TABLE CountriesT (
-                country_area double OPTIONS (NAMEINSOURCE '/countries/{id}/area'),
-                country_name varchar(255) PRIMARY KEY OPTIONS (NAMEINSOURCE '/countries/{id}/name') )
+                irreligious double OPTIONS (NAMEINSOURCE 'Religion.No religion'),
+                country_area double OPTIONS (NAMEINSOURCE 'area'),
+                country_name varchar(255) PRIMARY KEY OPTIONS (NAMEINSOURCE 'name') )
               OPTIONS (NAMEINSOURCE 'countries');
