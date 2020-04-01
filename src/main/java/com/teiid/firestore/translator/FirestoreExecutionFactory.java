@@ -21,6 +21,8 @@ package com.teiid.firestore.translator;
 import com.teiid.firestore.connection.FirestoreConnection;
 import org.teiid.language.QueryExpression;
 import org.teiid.language.Select;
+import org.teiid.logging.LogConstants;
+import org.teiid.logging.LogManager;
 import org.teiid.metadata.RuntimeMetadata;
 import org.teiid.translator.*;
 
@@ -36,6 +38,7 @@ public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactor
     @Override
     public void start() throws TranslatorException {
         super.start();
+        LogManager.logTrace(LogConstants.CTX_CONNECTOR, "Firestore ExecutionFactory Started");
     }
 
     @Override
@@ -57,6 +60,11 @@ public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactor
 
     @Override
     public boolean supportsOrderBy() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsRowLimit() {
         return true;
     }
 

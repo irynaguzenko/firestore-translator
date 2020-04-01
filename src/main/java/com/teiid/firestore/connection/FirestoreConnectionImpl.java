@@ -1,7 +1,6 @@
 package com.teiid.firestore.connection;
 
 import com.google.cloud.firestore.CollectionReference;
-import com.google.cloud.firestore.FieldPath;
 import com.google.cloud.firestore.Firestore;
 import org.teiid.spring.data.BaseConnection;
 
@@ -18,7 +17,6 @@ public class FirestoreConnectionImpl extends BaseConnection implements Firestore
     }
 
     @Override
-    public void close() throws Exception {
-        if (firestore != null) firestore.close();
+    public void close() {
     }
 }

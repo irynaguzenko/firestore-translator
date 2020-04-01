@@ -24,6 +24,8 @@ import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.teiid.firestore.connection.FirestoreConnection;
 import org.apache.commons.lang3.tuple.Pair;
 import org.teiid.language.*;
+import org.teiid.logging.LogConstants;
+import org.teiid.logging.LogManager;
 import org.teiid.translator.DataNotAvailableException;
 import org.teiid.translator.ResultSetExecution;
 import org.teiid.translator.TranslatorException;
@@ -77,12 +79,20 @@ public class FirestoreExecution implements ResultSetExecution {
         if (orderBy != null) {
             query = appendOrderBy(query, orderBy);
         }
+        Limit limit = command.getLimit();
+        if (limit != null) {
+            query = appendLimit(query, limit);
+        }
 
         try {
             results = Objects.requireNonNull(query).get().get().getDocuments().iterator();
         } catch (InterruptedException | ExecutionException e) {
             throw new TranslatorException(e.getMessage());
         }
+    }
+
+    private Query appendLimit(Query query, Limit limit) {
+        return query.limit(limit.getRowLimit());
     }
 
     private Query appendWhere(Query query, Condition where) throws TranslatorException {
@@ -129,14 +139,14 @@ public class FirestoreExecution implements ResultSetExecution {
 
     @Override
     public void close() {
+        LogManager.logDetail(LogConstants.CTX_CONNECTOR, "Closing the connection");
         fields = null;
         results = null;
     }
 
     @Override
     public void cancel() {
-        fields = null;
-        results = null;
+        close();
     }
 
     private String nameInSource(MetadataReference reference) {
