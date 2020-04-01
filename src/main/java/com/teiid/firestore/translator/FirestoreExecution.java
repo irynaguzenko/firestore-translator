@@ -48,7 +48,6 @@ public class FirestoreExecution implements ResultSetExecution {
     private FirestoreConnection connection;
     private static final Map<Comparison.Operator, BiFunction<Query, Pair<String, Object>, Query>> comparisons = Map.of(
             EQ, (q, p) -> q.whereEqualTo(p.getLeft(), p.getRight()),
-            NE, (q, p) -> q.whereGreaterThan(p.getLeft(), p.getRight()).whereLessThan(p.getLeft(), p.getRight()),
             LT, (q, p) -> q.whereLessThan(p.getLeft(), p.getRight()),
             LE, (q, p) -> q.whereLessThanOrEqualTo(p.getLeft(), p.getRight()),
             GT, (q, p) -> q.whereGreaterThan(p.getLeft(), p.getRight()),
@@ -95,6 +94,11 @@ public class FirestoreExecution implements ResultSetExecution {
             Object rightExpression = ((Literal) comparison.getRightExpression()).getValue();
             Comparison.Operator operator = valueOf(comparison.getOperator().name());
             return comparisons.get(operator).apply(query, Pair.of(leftExpression, rightExpression));
+        } else if (where instanceof In) {
+            In in = (In) where;
+            String leftExpression = nameInSource((MetadataReference) in.getLeftExpression());
+            List<Object> rightExpression = in.getRightExpressions().stream().map(expression -> ((Literal) expression).getValue()).collect(Collectors.toList());
+            return query.whereIn(leftExpression, rightExpression);
         }
         return null;
     }

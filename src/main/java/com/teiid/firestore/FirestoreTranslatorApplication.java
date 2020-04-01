@@ -24,7 +24,8 @@ public class FirestoreTranslatorApplication implements CommandLineRunner {
     @Override
     public void run(String... args) {
 //        List<Map<String, Object>> list = jdbcTemplate.queryForList("SELECT country_name FROM CountriesT WHERE country_name = 'Spain' AND country_area >= 505.99 AND country_area < 1000");
-        List<Map<String, Object>> list = jdbcTemplate.queryForList("SELECT country_name FROM CountriesT WHERE irreligious > 20");
+//        List<Map<String, Object>> list = jdbcTemplate.queryForList("SELECT country_name FROM CountriesT WHERE irreligious > 20");
+        List<Map<String, Object>> list = jdbcTemplate.queryForList("SELECT * FROM CountriesT WHERE country_name IN ('Italy', 'Spain', 'France')");
         System.out.println(list);
     }
 }
