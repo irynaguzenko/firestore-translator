@@ -56,6 +56,11 @@ public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactor
     }
 
     @Override
+    public boolean supportsOrderBy() {
+        return true;
+    }
+
+    @Override
     public boolean isSourceRequired() {
         return false;
     }

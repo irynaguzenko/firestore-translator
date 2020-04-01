@@ -37,6 +37,8 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.google.cloud.firestore.Query.Direction.ASCENDING;
+import static com.google.cloud.firestore.Query.Direction.DESCENDING;
 import static org.teiid.language.Comparison.Operator.*;
 
 
@@ -69,7 +71,11 @@ public class FirestoreExecution implements ResultSetExecution {
 
         Condition where = command.getWhere();
         if (where != null) {
-            query = processWhere(query, where);
+            query = appendWhere(query, where);
+        }
+        OrderBy orderBy = command.getOrderBy();
+        if (orderBy != null) {
+            query = appendOrderBy(query, orderBy);
         }
 
         try {
@@ -79,12 +85,12 @@ public class FirestoreExecution implements ResultSetExecution {
         }
     }
 
-    private Query processWhere(Query query, Condition where) throws TranslatorException {
+    private Query appendWhere(Query query, Condition where) throws TranslatorException {
         if (where instanceof AndOr) {
             AndOr andOr = (AndOr) where;
             switch (andOr.getOperator()) {
                 case AND:
-                    return processWhere(processWhere(query, andOr.getLeftCondition()), andOr.getRightCondition());
+                    return appendWhere(appendWhere(query, andOr.getLeftCondition()), andOr.getRightCondition());
                 case OR:
                     throw new TranslatorException("OR is not supported");
             }
@@ -100,7 +106,16 @@ public class FirestoreExecution implements ResultSetExecution {
             List<Object> rightExpression = in.getRightExpressions().stream().map(expression -> ((Literal) expression).getValue()).collect(Collectors.toList());
             return query.whereIn(leftExpression, rightExpression);
         }
-        return null;
+        throw new TranslatorException("Unsupported where clause");
+    }
+
+    private Query appendOrderBy(Query query, OrderBy orderBy) {
+        for (SortSpecification sortSpecification : orderBy.getSortSpecifications()) {
+            String ordering = sortSpecification.getOrdering().toString();
+            String field = nameInSource((MetadataReference) sortSpecification.getExpression());
+            query = query.orderBy(field, ordering.equals("DESC") ? DESCENDING : ASCENDING);
+        }
+        return query;
     }
 
     @Override
