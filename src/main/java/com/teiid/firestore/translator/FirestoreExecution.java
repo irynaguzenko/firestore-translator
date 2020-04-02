@@ -115,6 +115,14 @@ public class FirestoreExecution implements ResultSetExecution {
             String leftExpression = nameInSource((MetadataReference) in.getLeftExpression());
             List<Object> rightExpression = in.getRightExpressions().stream().map(expression -> ((Literal) expression).getValue()).collect(Collectors.toList());
             return query.whereIn(leftExpression, rightExpression);
+        } else if (where instanceof Like) {
+            Like like = (Like) where;
+            String leftExpression = nameInSource((MetadataReference) like.getLeftExpression());
+            String rightExpression = (String) ((Literal) like.getRightExpression()).getValue();
+            if (!rightExpression.endsWith("%"))
+                throw new TranslatorException("Unsupported LIKE expression. Only prefix filtering is allowed");
+            String prefix = rightExpression.substring(0, rightExpression.length() - 1);
+            return query.whereGreaterThanOrEqualTo(leftExpression, prefix).whereLessThanOrEqualTo(leftExpression, prefix + "\uf8ff");
         }
         throw new TranslatorException("Unsupported where clause");
     }

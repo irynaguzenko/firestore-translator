@@ -51,6 +51,13 @@ public class FirestoreTranslatorTest {
     }
 
     @Test
+    public void shouldReturnFilteredDocumentWhenSettingTheFieldPrefixValue() {
+        String query = "SELECT country_capital FROM CountriesT WHERE country_capital LIKE ('Ma%')";
+        List<Map<String, Object>> result = template.queryForList(query);
+        assertArrayEquals(new String[]{"Madrid", "Malaga"}, result.stream().map(m -> m.get("country_capital")).sorted().toArray());
+    }
+
+    @Test
     public void shouldReturnOrderedRecordsWhenOrderingByAreaAndName() {
         String query = "SELECT * FROM CountriesT ORDER BY country_area, country_name DESC";
         List<Map<String, Object>> result = template.queryForList(query);

@@ -59,6 +59,11 @@ public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactor
     }
 
     @Override
+    public boolean supportsLikeCriteria() {
+        return true;
+    }
+
+    @Override
     public boolean supportsOrderBy() {
         return true;
     }
