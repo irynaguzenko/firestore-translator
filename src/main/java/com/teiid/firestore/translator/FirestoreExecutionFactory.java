@@ -19,6 +19,8 @@
 package com.teiid.firestore.translator;
 
 import com.teiid.firestore.connection.FirestoreConnection;
+import org.teiid.language.BulkCommand;
+import org.teiid.language.Command;
 import org.teiid.language.QueryExpression;
 import org.teiid.language.Select;
 import org.teiid.logging.LogConstants;
@@ -43,7 +45,12 @@ public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactor
 
     @Override
     public ResultSetExecution createResultSetExecution(QueryExpression command, ExecutionContext executionContext, RuntimeMetadata metadata, FirestoreConnection connectionFactory) {
-        return new FirestoreExecution((Select) command, connectionFactory);
+        return new FirestoreSelectExecution((Select) command, connectionFactory);
+    }
+
+    @Override
+    public UpdateExecution createUpdateExecution(Command command, ExecutionContext executionContext, RuntimeMetadata metadata, FirestoreConnection connection) throws TranslatorException {
+        return new FirestoreUpdateExecution((BulkCommand) command, connection);
     }
 
     public boolean supportsCompareCriteriaEquals() {

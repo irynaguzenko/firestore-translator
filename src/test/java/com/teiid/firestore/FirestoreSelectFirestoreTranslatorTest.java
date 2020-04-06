@@ -15,7 +15,7 @@ import static org.junit.Assert.assertEquals;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
-public class FirestoreTranslatorTest {
+public class FirestoreSelectFirestoreTranslatorTest {
     @Autowired
     private JdbcTemplate template;
 
@@ -24,6 +24,13 @@ public class FirestoreTranslatorTest {
         String query = "SELECT country_area, right_side_driving FROM CountriesT";
         List<Map<String, Object>> result = template.queryForList(query);
         assertArrayEquals(new String[]{"country_area", "right_side_driving"}, result.get(0).keySet().toArray());
+    }
+
+    @Test
+    public void shouldReturnDocumentIdsWhenSelectingReservedNameColumn() {
+        String query = "SELECT id, country_name FROM CountriesT";
+        List<Map<String, Object>> result = template.queryForList(query);
+        assertEquals("8B29ww4lnHkrbWL0XH10", result.stream().map(m -> m.get("id")).sorted().toArray()[0]);
     }
 
     @Test

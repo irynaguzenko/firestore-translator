@@ -19,6 +19,7 @@
 package com.teiid.firestore.translator;
 
 
+import com.google.cloud.firestore.FieldPath;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.teiid.firestore.connection.FirestoreConnection;
@@ -47,7 +48,7 @@ import static org.teiid.language.Comparison.Operator.*;
 /**
  * Represents the execution of a command.
  */
-public class FirestoreExecution implements ResultSetExecution {
+public class FirestoreSelectExecution implements ResultSetExecution {
     private Select command;
     private FirestoreConnection connection;
     private static final Map<Comparison.Operator, BiFunction<Query, Pair<String, Object>, Query>> comparisons = Map.of(
@@ -60,7 +61,7 @@ public class FirestoreExecution implements ResultSetExecution {
     private Iterator<QueryDocumentSnapshot> results;
     private String[] fields;
 
-    FirestoreExecution(Select query, FirestoreConnection firestoreConnection) {
+    FirestoreSelectExecution(Select query, FirestoreConnection firestoreConnection) {
         this.command = query;
         this.connection = firestoreConnection;
         this.fields = fields();
@@ -140,7 +141,9 @@ public class FirestoreExecution implements ResultSetExecution {
     public List<?> next() throws DataNotAvailableException {
         if (results != null && results.hasNext()) {
             QueryDocumentSnapshot next = results.next();
-            return Stream.of(fields).map(next::get).collect(Collectors.toList());
+            return Stream.of(fields)
+                    .map(field -> field.equals(FieldPath.documentId().toString()) ? next.getId() : next.get(field))
+                    .collect(Collectors.toList());
         }
         return null;
     }
