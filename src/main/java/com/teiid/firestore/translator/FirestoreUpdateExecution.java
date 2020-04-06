@@ -3,11 +3,10 @@ package com.teiid.firestore.translator;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.FieldPath;
+import com.google.cloud.firestore.WriteBatch;
 import com.google.cloud.firestore.WriteResult;
 import com.teiid.firestore.connection.FirestoreConnection;
 import org.teiid.language.*;
-import org.teiid.logging.LogConstants;
-import org.teiid.logging.LogManager;
 import org.teiid.translator.DataNotAvailableException;
 import org.teiid.translator.TranslatorException;
 import org.teiid.translator.UpdateExecution;
@@ -31,29 +30,42 @@ public class FirestoreUpdateExecution implements UpdateExecution {
     @Override
     public void execute() throws TranslatorException {
         if (command instanceof Insert) {
-//            TODO: multipleValueStatements
             Insert insert = (Insert) command;
             CollectionReference collection = connection.collection(insert.getTable().getMetadataObject().getNameInSource());
-            Map<String, Object> fieldValues = getFieldValues(insert);
-            Optional<String> documentId = Optional.ofNullable((String) fieldValues.remove(FieldPath.documentId().toString()));
-            ApiFuture<WriteResult> future = documentId.map(collection::document).orElseGet(collection::document).set(fieldValues);
+            List<ColumnReference> columns = insert.getColumns();
+            WriteBatch batch = connection.batch();
+            if (insert.getParameterValues() == null) {
+                setDocument(collection, columns, batch, getSingleInsertParams(insert));
+            } else {
+                insert.getParameterValues().forEachRemaining(parameters -> setDocument(collection, columns, batch, parameters));
+            }
+            ApiFuture<List<WriteResult>> commit = batch.commit();
             try {
-                WriteResult writeResult = future.get();
-                updateCounts.add(1);
-                LogManager.logDetail(LogConstants.CTX_CONNECTOR, "Inserted " + writeResult.getUpdateTime());
+                List<WriteResult> writeResults = commit.get();
+                updateCounts.add(writeResults.size());
             } catch (InterruptedException | ExecutionException e) {
                 throw new TranslatorException(e.getMessage());
             }
         }
     }
 
-    private Map<String, Object> getFieldValues(Insert insert) {
-        List<Expression> values = ((ExpressionValueSource) insert.getValueSource()).getValues();
-        List<ColumnReference> columns = insert.getColumns();
+    private List<?> getSingleInsertParams(Insert insert) {
+        return ((ExpressionValueSource) insert.getValueSource()).getValues().stream()
+                .map(v -> ((Literal) v).getValue())
+                .collect(Collectors.toList());
+    }
+
+    private void setDocument(CollectionReference collection, List<ColumnReference> columns, WriteBatch batch, List<?> parameters) {
+        Map<String, Object> fieldValues = getFieldValues(columns, parameters);
+        Optional<String> documentId = Optional.ofNullable((String) fieldValues.remove(FieldPath.documentId().toString()));
+        batch.set(documentId.map(collection::document).orElseGet(collection::document), fieldValues);
+    }
+
+    private Map<String, Object> getFieldValues(List<ColumnReference> columns, List<?> values) {
         return IntStream.range(0, columns.size())
                 .mapToObj(index -> {
                     String fieldName = columns.get(index).getMetadataObject().getNameInSource();
-                    Object value = ((Literal) values.get(index)).getValue();
+                    Object value = values.get(index);
                     return addField(fieldName, value);
                 })
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));

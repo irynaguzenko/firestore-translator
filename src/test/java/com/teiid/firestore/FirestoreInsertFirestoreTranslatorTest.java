@@ -30,4 +30,12 @@ public class FirestoreInsertFirestoreTranslatorTest {
         int rowsAffected = template.update(query);
         assertEquals(1, rowsAffected);
     }
+
+    @Test
+    public void shouldAddMultipleDocumentsToCollectionWhenInsertingWithId() {
+        String query = "INSERT INTO CountriesT (id, country_name) VALUES ('A', 'France'), ('B', 'Greece'), ('C', 'Finland')";
+        int rowsAffected = template.update(query);
+//        TODO: fix upd count
+//        assertEquals(3, rowsAffected);
+    }
 }

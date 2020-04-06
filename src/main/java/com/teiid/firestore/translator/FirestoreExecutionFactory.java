@@ -89,4 +89,9 @@ public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactor
     public boolean supportsOnlyLiteralComparison() {
         return true;
     }
+
+    @Override
+    public boolean supportsBulkUpdate() {
+        return true;
+    }
 }
