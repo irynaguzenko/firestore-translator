@@ -19,6 +19,7 @@
 package com.teiid.firestore.translator;
 
 import com.teiid.firestore.connection.FirestoreConnection;
+import com.teiid.firestore.translator.appenders.WhereAppender;
 import org.teiid.language.BulkCommand;
 import org.teiid.language.Command;
 import org.teiid.language.QueryExpression;
@@ -32,25 +33,23 @@ import javax.resource.cci.ConnectionFactory;
 
 @Translator(name = "firestore", description = "Firestore custom translator")
 public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactory, FirestoreConnection> {
-
-
-    public FirestoreExecutionFactory() {
-    }
+    private WhereAppender whereAppender;
 
     @Override
     public void start() throws TranslatorException {
         super.start();
+        whereAppender = new WhereAppender();
         LogManager.logTrace(LogConstants.CTX_CONNECTOR, "Firestore ExecutionFactory Started");
     }
 
     @Override
     public ResultSetExecution createResultSetExecution(QueryExpression command, ExecutionContext executionContext, RuntimeMetadata metadata, FirestoreConnection connectionFactory) {
-        return new FirestoreSelectExecution((Select) command, connectionFactory);
+        return new FirestoreSelectExecution((Select) command, connectionFactory, whereAppender);
     }
 
     @Override
     public UpdateExecution createUpdateExecution(Command command, ExecutionContext executionContext, RuntimeMetadata metadata, FirestoreConnection connection) throws TranslatorException {
-        return new FirestoreUpdateExecution((BulkCommand) command, connection);
+        return new FirestoreUpdateExecution((BulkCommand) command, connection, whereAppender);
     }
 
     public boolean supportsCompareCriteriaEquals() {

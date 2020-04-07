@@ -15,7 +15,7 @@ import static org.junit.Assert.assertEquals;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
-public class FirestoreSelectFirestoreTranslatorTest {
+public class FirestoreSelectTranslatorTest {
     @Autowired
     private JdbcTemplate template;
 
@@ -49,9 +49,10 @@ public class FirestoreSelectFirestoreTranslatorTest {
         assertEquals("Ukraine", result.get(0).get("country_name"));
     }
 
+    //Document Id is not supported for 'WHERE IN' conditions
     @Test
     public void shouldReturnFilteredDocumentWhenSelectingWithInCondition() {
-        String query = "SELECT * FROM CountriesT WHERE country_name IN ('Italy', 'Ukraine', 'France')";
+        String query = "SELECT * FROM CountriesT WHERE country_name IN ('Italy', 'Ukraine', 'Sweden')";
         List<Map<String, Object>> result = template.queryForList(query);
         assertEquals(1, result.size());
         assertEquals("Ukraine", result.get(0).get("country_name"));
