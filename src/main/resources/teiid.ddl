@@ -14,6 +14,6 @@ CREATE FOREIGN TABLE CountriesT (
                 right_side_driving boolean OPTIONS (NAMEINSOURCE 'right-side-driving'),
                 country_capital varchar (255) OPTIONS (NAMEINSOURCE 'capital'),
                 country_area double OPTIONS (NAMEINSOURCE 'area'),
-                test_inserted boolean OPTIONS (NAMEINSOURCE 'testInserted'),
+                test boolean OPTIONS (NAMEINSOURCE 'test'),
                 country_name varchar (255) OPTIONS (NAMEINSOURCE 'name') )
               OPTIONS (NAMEINSOURCE 'countries', UPDATABLE TRUE);

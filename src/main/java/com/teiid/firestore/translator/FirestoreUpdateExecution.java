@@ -30,25 +30,28 @@ public class FirestoreUpdateExecution implements UpdateExecution {
     @Override
     public void execute() throws TranslatorException {
         WriteBatch batch = connection.batch();
+        List<WriteResult> writeResults = getWriteResults(batch);
+        if (command instanceof Update) {
+            updateCounts.add(writeResults.size());
+        } else {
+            writeResults.forEach(result -> updateCounts.add(1));
+        }
+    }
+
+    private List<WriteResult> getWriteResults(WriteBatch batch) throws TranslatorException {
         try {
             if (command instanceof Insert) {
                 executeInsert((Insert) command, batch);
             } else if (command instanceof Delete) {
                 executeDelete((Delete) command, batch);
+            } else if (command instanceof Update) {
+                executeUpdate((Update) command, batch);
             }
             ApiFuture<List<WriteResult>> commit = batch.commit();
-            commit.get().forEach(result -> updateCounts.add(1));
+            return commit.get();
         } catch (InterruptedException | ExecutionException e) {
             updateCounts.add(-3);
             throw new TranslatorException(e.getMessage());
-        }
-    }
-
-    private void executeDelete(Delete delete, WriteBatch batch) throws TranslatorException, ExecutionException, InterruptedException {
-        CollectionReference collection = connection.collection(nameInSource(delete.getTable()));
-        Query query = whereAppender.appendWhere(collection, delete.getWhere());
-        for (QueryDocumentSnapshot snapshot : query.get().get().getDocuments()) {
-            batch.delete(snapshot.getReference());
         }
     }
 
@@ -60,6 +63,17 @@ public class FirestoreUpdateExecution implements UpdateExecution {
         } else {
             insert.getParameterValues().forEachRemaining(parameters -> setDocument(collection, columns, batch, parameters));
         }
+    }
+
+    private void executeDelete(Delete delete, WriteBatch batch) throws ExecutionException, InterruptedException, TranslatorException {
+        selectDocuments(delete.getTable(), delete.getWhere())
+                .forEach(snapshot -> batch.delete(snapshot.getReference()));
+    }
+
+    private void executeUpdate(Update update, WriteBatch batch) throws TranslatorException, ExecutionException, InterruptedException {
+        Map<String, Object> changes = toMap(update.getChanges());
+        selectDocuments(update.getTable(), update.getWhere())
+                .forEach(snapshot -> batch.update(snapshot.getReference(), changes));
     }
 
     private String nameInSource(MetadataReference reference) {
@@ -95,6 +109,17 @@ public class FirestoreUpdateExecution implements UpdateExecution {
             return new AbstractMap.SimpleEntry<>(fieldParts[0], Map.of(nestedEntry.getKey(), nestedEntry.getValue()));
         }
         return new AbstractMap.SimpleEntry<>(fieldName, value);
+    }
+
+    private List<QueryDocumentSnapshot> selectDocuments(NamedTable table, Condition where) throws InterruptedException, ExecutionException, TranslatorException {
+        CollectionReference collection = connection.collection(nameInSource(table));
+        return whereAppender.appendWhere(collection, where).get().get().getDocuments();
+    }
+
+    private Map<String, Object> toMap(List<SetClause> changes) {
+        return changes.stream()
+                .map(change -> new AbstractMap.SimpleEntry<>(nameInSource(change.getSymbol()), ((Literal) change.getValue()).getValue()))
+                .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
     }
 
     @Override
