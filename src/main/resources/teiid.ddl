@@ -17,3 +17,10 @@ CREATE FOREIGN TABLE CountriesT (
                 test boolean OPTIONS (NAMEINSOURCE 'test'),
                 country_name varchar (255) OPTIONS (NAMEINSOURCE 'name') )
               OPTIONS (NAMEINSOURCE 'countries', UPDATABLE TRUE);
+
+CREATE FOREIGN TABLE CitiesT (
+                id varchar (255) PRIMARY KEY OPTIONS (NAMEINSOURCE '__name__'),
+                parent_id varchar (255) OPTIONS (NAMEINSOURCE '__parent_id_name__'),
+                city_name varchar (255) OPTIONS (NAMEINSOURCE 'name'),
+                population double OPTIONS (NAMEINSOURCE 'population'))
+              OPTIONS (NAMEINSOURCE 'cities', UPDATABLE TRUE);

@@ -23,24 +23,23 @@ import com.google.cloud.firestore.FieldPath;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.teiid.firestore.connection.FirestoreConnection;
-import com.teiid.firestore.translator.appenders.WhereAppender;
+import com.teiid.firestore.translator.appenders.WhereProcessor;
 import org.teiid.language.*;
 import org.teiid.logging.LogConstants;
 import org.teiid.logging.LogManager;
+import org.teiid.metadata.AbstractMetadataRecord;
 import org.teiid.translator.DataNotAvailableException;
 import org.teiid.translator.ResultSetExecution;
 import org.teiid.translator.TranslatorException;
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.cloud.firestore.Query.Direction.ASCENDING;
 import static com.google.cloud.firestore.Query.Direction.DESCENDING;
-import static com.teiid.firestore.translator.common.TranslatorUtils.nameInSource;
+import static com.teiid.firestore.translator.common.TranslatorUtils.*;
 
 
 /**
@@ -49,40 +48,66 @@ import static com.teiid.firestore.translator.common.TranslatorUtils.nameInSource
 public class FirestoreSelectExecution implements ResultSetExecution {
     private Select command;
     private FirestoreConnection connection;
-    private WhereAppender whereAppender;
+    private WhereProcessor whereProcessor;
     private Iterator<QueryDocumentSnapshot> results;
     private String[] fields;
 
-    FirestoreSelectExecution(Select query, FirestoreConnection firestoreConnection, WhereAppender whereAppender) {
+    FirestoreSelectExecution(Select query, FirestoreConnection firestoreConnection, WhereProcessor whereProcessor) {
         this.command = query;
         this.connection = firestoreConnection;
-        this.whereAppender = whereAppender;
+        this.whereProcessor = whereProcessor;
         this.fields = fields();
     }
 
     @Override
     public void execute() throws TranslatorException {
         String collectionName = nameInSource((MetadataReference) command.getFrom().get(0));
-        Query query = connection.collection(collectionName).select(fields);
+        boolean isCollectionGroup = ((NamedTable) command.getFrom().get(0)).getMetadataObject().getColumns().stream()
+                .map(AbstractMetadataRecord::getNameInSource)
+                .anyMatch(PARENT_ID::equals);
+        try {
+            results = isCollectionGroup ?
+                    executeSubCollectionGroupSelect(collectionName) :
+                    executeRootCollectionSelect(collectionName);
+        } catch (ExecutionException | InterruptedException e) {
+            throw new TranslatorException(e);
+        }
+    }
 
+    private Iterator<QueryDocumentSnapshot> executeRootCollectionSelect(String collectionName) throws TranslatorException, ExecutionException, InterruptedException {
+        Query query = appendQueryCriteria(connection.collection(collectionName).select(this.fields));
+        return Objects.requireNonNull(query).get().get().getDocuments().iterator();
+    }
+
+    private Iterator<QueryDocumentSnapshot> executeSubCollectionGroupSelect(String collectionName) throws TranslatorException, ExecutionException, InterruptedException {
+        String[] filteredFields = Arrays.stream(fields)
+                .filter(field -> !PARENT_ID.equals(field))
+                .toArray(String[]::new);
+        Query query = appendQueryCriteria(connection.collectionGroup(collectionName).select(filteredFields));
+        List<QueryDocumentSnapshot> documentSnapshots = new ArrayList<>(query.get().get().getDocuments());
         Condition where = command.getWhere();
         if (where != null) {
-            query = whereAppender.appendWhere(query, where);
+            whereProcessor.filterCollectionGroup(documentSnapshots, where);
         }
+        return documentSnapshots.iterator();
+    }
+
+    private Query appendQueryCriteria(Query query) throws TranslatorException {
+        Condition where = command.getWhere();
+        if (where != null) {
+            query = whereProcessor.appendWhere(query, where);
+        }
+
         OrderBy orderBy = command.getOrderBy();
         if (orderBy != null) {
             query = appendOrderBy(query, orderBy);
         }
+
         Limit limit = command.getLimit();
         if (limit != null) {
             query = appendLimit(query, limit);
         }
-
-        try {
-            results = Objects.requireNonNull(query).get().get().getDocuments().iterator();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new TranslatorException(e.getMessage());
-        }
+        return query;
     }
 
     private Query appendLimit(Query query, Limit limit) {
@@ -103,7 +128,15 @@ public class FirestoreSelectExecution implements ResultSetExecution {
         if (results != null && results.hasNext()) {
             QueryDocumentSnapshot next = results.next();
             return Stream.of(fields)
-                    .map(field -> field.equals(FieldPath.documentId().toString()) ? next.getId() : next.get(field))
+                    .map(field -> {
+                        if (field.equals(FieldPath.documentId().toString())) {
+                            return next.getId();
+                        } else if (field.equals(PARENT_ID)) {
+                            return parentId(next);
+                        } else {
+                            return next.get(field);
+                        }
+                    })
                     .collect(Collectors.toList());
         }
         return null;

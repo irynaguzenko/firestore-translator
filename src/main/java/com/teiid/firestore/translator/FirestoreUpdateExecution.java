@@ -3,7 +3,7 @@ package com.teiid.firestore.translator;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import com.teiid.firestore.connection.FirestoreConnection;
-import com.teiid.firestore.translator.appenders.WhereAppender;
+import com.teiid.firestore.translator.appenders.WhereProcessor;
 import org.teiid.language.*;
 import org.teiid.translator.DataNotAvailableException;
 import org.teiid.translator.TranslatorException;
@@ -17,13 +17,13 @@ import java.util.stream.IntStream;
 public class FirestoreUpdateExecution implements UpdateExecution {
     private BulkCommand command;
     private FirestoreConnection connection;
-    private WhereAppender whereAppender;
+    private WhereProcessor whereProcessor;
     private List<Integer> updateCounts;
 
-    FirestoreUpdateExecution(BulkCommand command, FirestoreConnection connection, WhereAppender whereAppender) {
+    FirestoreUpdateExecution(BulkCommand command, FirestoreConnection connection, WhereProcessor whereProcessor) {
         this.command = command;
         this.connection = connection;
-        this.whereAppender = whereAppender;
+        this.whereProcessor = whereProcessor;
         updateCounts = new ArrayList<>();
     }
 
@@ -113,7 +113,7 @@ public class FirestoreUpdateExecution implements UpdateExecution {
 
     private List<QueryDocumentSnapshot> selectDocuments(NamedTable table, Condition where) throws InterruptedException, ExecutionException, TranslatorException {
         CollectionReference collection = connection.collection(nameInSource(table));
-        return whereAppender.appendWhere(collection, where).get().get().getDocuments();
+        return whereProcessor.appendWhere(collection, where).get().get().getDocuments();
     }
 
     private Map<String, Object> toMap(List<SetClause> changes) {

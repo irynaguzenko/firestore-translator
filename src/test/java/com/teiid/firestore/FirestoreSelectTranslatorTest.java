@@ -79,4 +79,41 @@ public class FirestoreSelectTranslatorTest {
         String query = "SELECT * FROM CountriesT LIMIT 2";
         assertEquals(2, template.queryForList(query).size());
     }
+
+    @Test
+    public void shouldSelectGroupIncludingParentIdFieldWhenSelectingFromSubCollection() {
+        String query = "SELECT * FROM CitiesT";
+        List<Map<String, Object>> result = template.queryForList(query);
+        assertArrayEquals(new String[]{"Dnipro", "Lviv", "Malaga", "Sevilla", "Valencia"}, result.stream().map(m -> m.get("city_name")).sorted().toArray());
+        assertArrayEquals(new String[]{"fLrLLOR18LLYEu4Zf9pp", "TOywf0YvvNeMcY23k3e2"}, result.stream().map(m -> m.get("parent_id")).distinct().sorted().toArray());
+    }
+
+    @Test
+    public void shouldSelectSpecificSubCollectionWhenSettingParentIdEqualityCondition() {
+        String query = "SELECT city_name FROM CitiesT WHERE parent_id = 'fLrLLOR18LLYEu4Zf9pp'";
+        List<Map<String, Object>> result = template.queryForList(query);
+        assertArrayEquals(new String[]{"Dnipro", "Lviv"}, result.stream().map(m -> m.get("city_name")).sorted().toArray());
+        assertEquals(1, result.stream().map(m -> m.get("parent_id")).distinct().count());
+    }
+
+    @Test
+    public void shouldSelectSpecificSubCollectionWhenSettingParentIdLikeCondition() {
+        String query = "SELECT id FROM CitiesT WHERE parent_id LIKE 'n%'";
+        List<Map<String, Object>> result = template.queryForList(query);
+        assertEquals("i5zJ8Fbs6JV6PJkEI7B1", result.get(0).get("id"));
+    }
+
+    @Test
+    public void shouldSelectSpecificSubCollectionsWhenSettingParentIdInCondition() {
+        String query = "SELECT id FROM CitiesT WHERE parent_id IN ('nf7JODgYVpyqyVWdkHng', 'fLrLLOR18LLYEu4Zf9pp')";
+        List<Map<String, Object>> result = template.queryForList(query);
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    public void shouldSelectSpecificSubCollectionsWhenCompoundCondition() {
+        String query = "SELECT city_name FROM CitiesT WHERE parent_id = 'fLrLLOR18LLYEu4Zf9pp' AND population > 900";
+        List<Map<String, Object>> result = template.queryForList(query);
+        assertEquals("Dnipro", result.get(0).get("city_name"));
+    }
 }

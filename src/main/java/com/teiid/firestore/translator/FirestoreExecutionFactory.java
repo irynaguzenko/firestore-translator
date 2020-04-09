@@ -19,7 +19,7 @@
 package com.teiid.firestore.translator;
 
 import com.teiid.firestore.connection.FirestoreConnection;
-import com.teiid.firestore.translator.appenders.WhereAppender;
+import com.teiid.firestore.translator.appenders.WhereProcessor;
 import org.teiid.language.BulkCommand;
 import org.teiid.language.Command;
 import org.teiid.language.QueryExpression;
@@ -33,23 +33,23 @@ import javax.resource.cci.ConnectionFactory;
 
 @Translator(name = "firestore", description = "Firestore custom translator")
 public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactory, FirestoreConnection> {
-    private WhereAppender whereAppender;
+    private WhereProcessor whereProcessor;
 
     @Override
     public void start() throws TranslatorException {
         super.start();
-        whereAppender = new WhereAppender();
+        whereProcessor = new WhereProcessor();
         LogManager.logTrace(LogConstants.CTX_CONNECTOR, "Firestore ExecutionFactory Started");
     }
 
     @Override
     public ResultSetExecution createResultSetExecution(QueryExpression command, ExecutionContext executionContext, RuntimeMetadata metadata, FirestoreConnection connectionFactory) {
-        return new FirestoreSelectExecution((Select) command, connectionFactory, whereAppender);
+        return new FirestoreSelectExecution((Select) command, connectionFactory, whereProcessor);
     }
 
     @Override
     public UpdateExecution createUpdateExecution(Command command, ExecutionContext executionContext, RuntimeMetadata metadata, FirestoreConnection connection) throws TranslatorException {
-        return new FirestoreUpdateExecution((BulkCommand) command, connection, whereAppender);
+        return new FirestoreUpdateExecution((BulkCommand) command, connection, whereProcessor);
     }
 
     public boolean supportsCompareCriteriaEquals() {

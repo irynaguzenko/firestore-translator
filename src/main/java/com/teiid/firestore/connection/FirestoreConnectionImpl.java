@@ -2,6 +2,7 @@ package com.teiid.firestore.connection;
 
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.Firestore;
+import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.WriteBatch;
 import org.teiid.spring.data.BaseConnection;
 
@@ -15,6 +16,11 @@ public class FirestoreConnectionImpl extends BaseConnection implements Firestore
     @Override
     public CollectionReference collection(String collectionName) {
         return firestore.collection(collectionName);
+    }
+
+    @Override
+    public Query collectionGroup(String collectionName) {
+        return firestore.collectionGroup(collectionName);
     }
 
     @Override
