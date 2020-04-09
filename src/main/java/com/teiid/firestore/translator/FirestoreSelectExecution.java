@@ -76,6 +76,10 @@ public class FirestoreSelectExecution implements ResultSetExecution {
 
     private Iterator<QueryDocumentSnapshot> executeRootCollectionSelect(String collectionName) throws TranslatorException, ExecutionException, InterruptedException {
         Query query = appendQueryCriteria(connection.collection(collectionName).select(this.fields));
+        Limit limit = command.getLimit();
+        if (limit != null) {
+            query = query.limit(limit.getRowLimit());
+        }
         return Objects.requireNonNull(query).get().get().getDocuments().iterator();
     }
 
@@ -88,6 +92,10 @@ public class FirestoreSelectExecution implements ResultSetExecution {
         Condition where = command.getWhere();
         if (where != null) {
             whereProcessor.filterCollectionGroup(documentSnapshots, where);
+        }
+        Limit limit = command.getLimit();
+        if (limit != null) {
+            documentSnapshots = documentSnapshots.stream().limit(limit.getRowLimit()).collect(Collectors.toList());
         }
         return documentSnapshots.iterator();
     }
@@ -102,22 +110,14 @@ public class FirestoreSelectExecution implements ResultSetExecution {
         if (orderBy != null) {
             query = appendOrderBy(query, orderBy);
         }
-
-        Limit limit = command.getLimit();
-        if (limit != null) {
-            query = appendLimit(query, limit);
-        }
         return query;
     }
 
-    private Query appendLimit(Query query, Limit limit) {
-        return query.limit(limit.getRowLimit());
-    }
-
-    private Query appendOrderBy(Query query, OrderBy orderBy) {
+    private Query appendOrderBy(Query query, OrderBy orderBy) throws TranslatorException {
         for (SortSpecification sortSpecification : orderBy.getSortSpecifications()) {
-            String ordering = sortSpecification.getOrdering().toString();
             String field = nameInSource((MetadataReference) sortSpecification.getExpression());
+            if (PARENT_ID.equals(field)) throw new TranslatorException("Ordering by parent id is not supported");
+            String ordering = sortSpecification.getOrdering().toString();
             query = query.orderBy(field, ordering.equals("DESC") ? DESCENDING : ASCENDING);
         }
         return query;

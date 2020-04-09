@@ -84,8 +84,10 @@ public class FirestoreSelectTranslatorTest {
     public void shouldSelectGroupIncludingParentIdFieldWhenSelectingFromSubCollection() {
         String query = "SELECT * FROM CitiesT";
         List<Map<String, Object>> result = template.queryForList(query);
-        assertArrayEquals(new String[]{"Dnipro", "Lviv", "Malaga", "Sevilla", "Valencia"}, result.stream().map(m -> m.get("city_name")).sorted().toArray());
-        assertArrayEquals(new String[]{"fLrLLOR18LLYEu4Zf9pp", "TOywf0YvvNeMcY23k3e2"}, result.stream().map(m -> m.get("parent_id")).distinct().sorted().toArray());
+        assertArrayEquals(new String[]{"Dnipro", "Lviv", "Malaga", "New York", "Sevilla", "Valencia"},
+                result.stream().map(m -> m.get("city_name")).sorted().toArray());
+        assertArrayEquals(new String[]{"TOywf0YvvNeMcY23k3e2", "fLrLLOR18LLYEu4Zf9pp", "nf7JODgYVpyqyVWdkHng"},
+                result.stream().map(m -> m.get("parent_id")).distinct().sorted().toArray());
     }
 
     @Test
@@ -106,12 +108,17 @@ public class FirestoreSelectTranslatorTest {
     @Test
     public void shouldSelectSpecificSubCollectionsWhenSettingParentIdInCondition() {
         String query = "SELECT id FROM CitiesT WHERE parent_id IN ('nf7JODgYVpyqyVWdkHng', 'fLrLLOR18LLYEu4Zf9pp')";
-        List<Map<String, Object>> result = template.queryForList(query);
-        assertEquals(3, result.size());
+        assertEquals(3, template.queryForList(query).size());
     }
 
     @Test
-    public void shouldSelectSpecificSubCollectionsWhenCompoundCondition() {
+    public void shouldLimitedSubCollectionsWhenSettingLimit() {
+        String query = "SELECT id FROM CitiesT WHERE parent_id IN ('nf7JODgYVpyqyVWdkHng', 'fLrLLOR18LLYEu4Zf9pp') LIMIT 2";
+        assertEquals(2, template.queryForList(query).size());
+    }
+
+    @Test
+    public void shouldSelectSpecificSubCollectionsWhenSettingCompoundCondition() {
         String query = "SELECT city_name FROM CitiesT WHERE parent_id = 'fLrLLOR18LLYEu4Zf9pp' AND population > 900";
         List<Map<String, Object>> result = template.queryForList(query);
         assertEquals("Dnipro", result.get(0).get("city_name"));
