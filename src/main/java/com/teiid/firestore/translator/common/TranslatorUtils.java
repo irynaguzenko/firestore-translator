@@ -6,7 +6,7 @@ import org.teiid.language.MetadataReference;
 import java.util.Objects;
 
 public class TranslatorUtils {
-    public static final String PARENT_ID = "__parent_name__";
+    public static final String PARENT_ID_SUFFIX = "__parent_name__";
 
     public static String nameInSource(MetadataReference reference) {
         return reference.getMetadataObject().getNameInSource();

@@ -22,7 +22,7 @@ CREATE FOREIGN TABLE CountriesT (
 
 CREATE FOREIGN TABLE CitiesT (
                 id varchar (255) PRIMARY KEY OPTIONS (NAMEINSOURCE '__name__'),
-                parent_id varchar (255) OPTIONS (NAMEINSOURCE '__parent_name__'),
+                parent_id varchar (255) OPTIONS (NAMEINSOURCE 'countries__parent_name__'),
                 city_name varchar (255) OPTIONS (NAMEINSOURCE 'name'),
                 population double OPTIONS (NAMEINSOURCE 'population'))
               OPTIONS (NAMEINSOURCE 'cities', UPDATABLE TRUE);

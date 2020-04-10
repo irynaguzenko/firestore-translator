@@ -6,6 +6,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.teiid.language.*;
 import org.teiid.translator.TranslatorException;
 
+import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -96,6 +97,26 @@ public class WhereProcessor {
         }
     }
 
+    @Nullable
+    public String getParentIdEqualityExpressionValue(Condition where) throws TranslatorException {
+        if (where == null) return null;
+        if (where instanceof AndOr) {
+            AndOr andOr = (AndOr) where;
+            switch (andOr.getOperator()) {
+                case AND:
+                    String left = getParentIdEqualityExpressionValue(andOr.getLeftCondition());
+                    return left != null ? left : getParentIdEqualityExpressionValue(andOr.getRightCondition());
+                case OR:
+                    throw new TranslatorException("OR is not supported");
+            }
+        } else if (where instanceof Comparison) {
+            Comparison comparison = (Comparison) where;
+            String leftExpression = fieldName(comparison.getLeftExpression());
+            return isParentId(leftExpression) && EQ.equals(comparison.getOperator()) ? (String) rightValue(comparison) : null;
+        }
+        return null;
+    }
+
     private Object rightValue(Comparison comparison) {
         return ((Literal) comparison.getRightExpression()).getValue();
     }
@@ -116,7 +137,7 @@ public class WhereProcessor {
     }
 
     private boolean isParentId(String fieldName) {
-        return PARENT_ID.equals(fieldName);
+        return fieldName.endsWith(PARENT_ID_SUFFIX);
     }
 
     private boolean isNotParentId(Expression expression) {
