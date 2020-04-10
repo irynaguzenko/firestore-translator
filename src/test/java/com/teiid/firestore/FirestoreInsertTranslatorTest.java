@@ -7,7 +7,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.junit4.SpringRunner;
+import org.teiid.core.types.ArrayImpl;
 
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(SpringRunner.class)
@@ -52,5 +57,23 @@ public class FirestoreInsertTranslatorTest {
         int rowsAffected = template.update(query);
         assertEquals(3, rowsAffected);
         assertEquals(3, template.queryForList("SELECT * FROM CountriesT WHERE country_name IN ('France', 'Greece', 'Finland')").size());
+    }
+
+    @Test
+    public void shouldAddDocumentWithArrayFieldToCollectionWhenCreatingArrayOfIntType() {
+        String query = "INSERT INTO CountriesT (id, int_array, test) VALUES ('arr123', ARRAY[22, 11, 0], true)";
+        int rowsAffected = template.update(query);
+        assertEquals(1, rowsAffected);
+        List<Map<String, Object>> select = template.queryForList("SELECT int_array FROM CountriesT WHERE id = 'arr123'");
+        assertArrayEquals(new Integer[]{22, 11, 0}, ((ArrayImpl) select.get(0).get("int_array")).getValues());
+    }
+
+    @Test
+    public void shouldAddDocumentWithArrayFieldToCollectionWhenCreatingArrayOfVarcharType() {
+        String query = "INSERT INTO CountriesT (id, varchar_array, test) VALUES ('arr456', ARRAY['str1', 'str2'], true)";
+        int rowsAffected = template.update(query);
+        assertEquals(1, rowsAffected);
+        List<Map<String, Object>> select = template.queryForList("SELECT varchar_array FROM CountriesT WHERE id = 'arr456'");
+        assertArrayEquals(new String[]{"str1", "str2"}, ((ArrayImpl) select.get(0).get("varchar_array")).getValues());
     }
 }

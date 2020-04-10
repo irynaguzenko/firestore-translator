@@ -75,7 +75,7 @@ public class FirestoreSelectExecution implements ResultSetExecution {
     }
 
     private Iterator<QueryDocumentSnapshot> executeRootCollectionSelect(String collectionName) throws TranslatorException, ExecutionException, InterruptedException {
-        Query query = appendQueryCriteria(connection.collection(collectionName).select(this.fields));
+        Query query = appendQueryCriteria(connection.collection(collectionName).select(fields));
         Limit limit = command.getLimit();
         if (limit != null) {
             query = query.limit(limit.getRowLimit());
@@ -134,7 +134,8 @@ public class FirestoreSelectExecution implements ResultSetExecution {
                         } else if (field.equals(PARENT_ID)) {
                             return parentId(next);
                         } else {
-                            return next.get(field);
+                            Object o = next.get(field);
+                            return o instanceof List ? ((List) o).toArray() : o;
                         }
                     })
                     .collect(Collectors.toList());

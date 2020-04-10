@@ -15,6 +15,8 @@ CREATE FOREIGN TABLE CountriesT (
                 country_capital varchar (255) OPTIONS (NAMEINSOURCE 'capital'),
                 country_area double OPTIONS (NAMEINSOURCE 'area'),
                 test boolean OPTIONS (NAMEINSOURCE 'test'),
+                int_array integer[] OPTIONS (NAMEINSOURCE 'intArray'),
+                varchar_array varchar[] OPTIONS (NAMEINSOURCE 'varcharArray'),
                 country_name varchar (255) OPTIONS (NAMEINSOURCE 'name') )
               OPTIONS (NAMEINSOURCE 'countries', UPDATABLE TRUE);
 

@@ -82,7 +82,8 @@ public class FirestoreUpdateExecution implements UpdateExecution {
 
     private List<?> getSingleInsertParams(Insert insert) {
         return ((ExpressionValueSource) insert.getValueSource()).getValues().stream()
-                .map(v -> ((Literal) v).getValue())
+                .map(v -> v instanceof Literal ? literal(v) :
+                        ((Array) v).getExpressions().stream().map(this::literal).collect(Collectors.toList()))
                 .collect(Collectors.toList());
     }
 
@@ -118,8 +119,12 @@ public class FirestoreUpdateExecution implements UpdateExecution {
 
     private Map<String, Object> toMap(List<SetClause> changes) {
         return changes.stream()
-                .map(change -> new AbstractMap.SimpleEntry<>(nameInSource(change.getSymbol()), ((Literal) change.getValue()).getValue()))
+                .map(change -> new AbstractMap.SimpleEntry<>(nameInSource(change.getSymbol()), literal(change.getValue())))
                 .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
+    }
+
+    private Object literal(Expression e) {
+        return ((Literal) e).getValue();
     }
 
     @Override
