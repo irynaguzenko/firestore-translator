@@ -90,6 +90,8 @@ public class FirestoreSelectTranslatorTest {
                 result.stream().map(m -> m.get("parent_id")).distinct().sorted().toArray());
     }
 
+
+    //    TODO: WHERE id= does not work
     @Test
     public void shouldSelectSpecificSubCollectionWhenSettingParentIdEqualityCondition() {
         String query = "SELECT city_name FROM CitiesT WHERE parent_id = 'fLrLLOR18LLYEu4Zf9pp'";

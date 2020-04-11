@@ -25,7 +25,6 @@ import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.teiid.firestore.connection.FirestoreConnection;
 import com.teiid.firestore.translator.appenders.WhereProcessor;
-import org.apache.commons.lang3.StringUtils;
 import org.teiid.language.*;
 import org.teiid.logging.LogConstants;
 import org.teiid.logging.LogManager;
@@ -64,12 +63,10 @@ public class FirestoreSelectExecution implements ResultSetExecution {
     @Override
     public void execute() throws TranslatorException {
         String collectionName = nameInSource((MetadataReference) command.getFrom().get(0));
-        Optional<Column> parentIdColumn = ((NamedTable) command.getFrom().get(0)).getMetadataObject().getColumns().stream()
-                .filter(c -> c.getNameInSource().endsWith(PARENT_ID_SUFFIX))
-                .findFirst();
+        Optional<Column> parentIdColumnMetadata = parentIdColumnMetadata((NamedTable) command.getFrom().get(0));
         try {
-            results = parentIdColumn.isPresent() ?
-                    executeSubCollectionSelect(collectionName, parentCollectionName(parentIdColumn.get())) :
+            results = parentIdColumnMetadata.isPresent() ?
+                    executeSubCollectionSelect(collectionName, parentCollectionName(parentIdColumnMetadata.get())) :
                     executeRootCollectionSelect(collectionName);
         } catch (ExecutionException | InterruptedException e) {
             throw new TranslatorException(e);
@@ -150,10 +147,6 @@ public class FirestoreSelectExecution implements ResultSetExecution {
         return command.getDerivedColumns().stream()
                 .map(derivedColumn -> nameInSource((ColumnReference) derivedColumn.getExpression()))
                 .toArray(String[]::new);
-    }
-
-    private String parentCollectionName(Column parentIdColumn) {
-        return parentIdColumn.getNameInSource().replace(PARENT_ID_SUFFIX, StringUtils.EMPTY);
     }
 
     @Override

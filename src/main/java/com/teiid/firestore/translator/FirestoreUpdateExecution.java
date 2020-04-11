@@ -5,6 +5,7 @@ import com.google.cloud.firestore.*;
 import com.teiid.firestore.connection.FirestoreConnection;
 import com.teiid.firestore.translator.appenders.WhereProcessor;
 import org.teiid.language.*;
+import org.teiid.metadata.Column;
 import org.teiid.translator.DataNotAvailableException;
 import org.teiid.translator.TranslatorException;
 import org.teiid.translator.UpdateExecution;
@@ -13,6 +14,8 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static com.teiid.firestore.translator.common.TranslatorUtils.*;
 
 public class FirestoreUpdateExecution implements UpdateExecution {
     private BulkCommand command;
@@ -55,8 +58,37 @@ public class FirestoreUpdateExecution implements UpdateExecution {
         }
     }
 
-    private void executeInsert(Insert insert, WriteBatch batch) {
-        CollectionReference collection = connection.collection(nameInSource(insert.getTable()));
+    private void executeInsert(Insert insert, WriteBatch batch) throws TranslatorException {
+        String collectionName = nameInSource(insert.getTable());
+        Optional<Column> parentIdColumn = parentIdColumnMetadata(insert.getTable());
+        if (parentIdColumn.isPresent()) {
+            insertToSubCollection(collectionName, parentCollectionName(parentIdColumn.get()), insert, batch);
+        } else {
+            insertToRootCollection(connection.collection(collectionName), insert, batch);
+        }
+    }
+
+    private void insertToSubCollection(String collectionName, String parentCollectionName, Insert insert, WriteBatch batch) throws TranslatorException {
+        List<ColumnReference> columns = insert.getColumns();
+        int indexOfParentIdField = IntStream.range(0, columns.size())
+                .filter(index -> nameInSource(columns.get(index)).endsWith(PARENT_ID_SUFFIX))
+                .findFirst()
+                .orElseThrow(() -> new TranslatorException("ParentId field value is missing"));
+        columns.remove(indexOfParentIdField);
+        if (insert.getParameterValues() == null) {
+            String parentId = (String) literal(((ExpressionValueSource) insert.getValueSource()).getValues().remove(indexOfParentIdField));
+            CollectionReference subCollection = connection.collection(parentCollectionName).document(parentId).collection(collectionName);
+            setDocument(subCollection, columns, batch, getSingleInsertParams(insert));
+        } else {
+            insert.getParameterValues().forEachRemaining(parameters -> {
+                String parentId = (String) parameters.remove(indexOfParentIdField);
+                CollectionReference subCollection = connection.collection(parentCollectionName).document(parentId).collection(collectionName);
+                setDocument(subCollection, columns, batch, parameters);
+            });
+        }
+    }
+
+    private void insertToRootCollection(CollectionReference collection, Insert insert, WriteBatch batch) {
         List<ColumnReference> columns = insert.getColumns();
         if (insert.getParameterValues() == null) {
             setDocument(collection, columns, batch, getSingleInsertParams(insert));

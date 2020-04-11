@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.teiid.core.types.ArrayImpl;
@@ -25,6 +26,9 @@ public class FirestoreInsertTranslatorTest {
     public void deleteCreated() {
         String query = "DELETE from CountriesT WHERE test";
         template.update(query);
+//        TODO: Delete from sub-collections. Sequential test flow fails
+//        String query = "DELETE from CitiesT WHERE test";
+//        template.update(query);
     }
 
     @Test
@@ -75,5 +79,51 @@ public class FirestoreInsertTranslatorTest {
         assertEquals(1, rowsAffected);
         List<Map<String, Object>> select = template.queryForList("SELECT varchar_array FROM CountriesT WHERE id = 'arr456'");
         assertArrayEquals(new String[]{"str1", "str2"}, ((ArrayImpl) select.get(0).get("varchar_array")).getValues());
+    }
+
+    @Test
+    public void shouldAddSubCollectionWhenInsertingWithParentIdAndId() {
+        String query = "INSERT INTO CitiesT (id, parent_id, test) VALUES ('testCityId', '8B29ww4lnHkrbWL0XH10', true)";
+        int rowsAffected = template.update(query);
+        assertEquals(1, rowsAffected);
+        List<Map<String, Object>> select = template.queryForList("SELECT id FROM CitiesT WHERE parent_id = '8B29ww4lnHkrbWL0XH10'");
+        assertEquals(1, select.size());
+        assertEquals("testCityId", select.get(0).get("id"));
+    }
+
+    @Test
+    public void shouldAddSubCollectionWithGeneratedIdWhenInsertingWithParentIdWithoutId() {
+        String query = "INSERT INTO CitiesT (parent_id, city_name, test) VALUES ('8B29ww4lnHkrbWL0XH10', 'Granada', true)";
+        int rowsAffected = template.update(query);
+        assertEquals(1, rowsAffected);
+        List<Map<String, Object>> select = template.queryForList("SELECT city_name, parent_id FROM CitiesT WHERE city_name = 'Granada'");
+        assertEquals("Granada", select.get(0).get("city_name"));
+        assertEquals("8B29ww4lnHkrbWL0XH10", select.get(0).get("parent_id"));
+    }
+
+    @Test
+    public void shouldAddSubCollectionsWhenInsertingMultipleValuesWithIds() {
+        String query = "INSERT INTO CitiesT (id, parent_id, test) " +
+                "VALUES ('test1', '8B29ww4lnHkrbWL0XH10', true), ('test2', '8B29ww4lnHkrbWL0XH10', true), ('test3', '8B29ww4lnHkrbWL0XH10', true)";
+        int rowsAffected = template.update(query);
+        assertEquals(3, rowsAffected);
+        List<Map<String, Object>> select = template.queryForList("SELECT id FROM CitiesT WHERE parent_id = '8B29ww4lnHkrbWL0XH10'");
+        assertArrayEquals(new String[]{"test1", "test2", "test3"}, select.stream().map(m -> m.get("id")).sorted().toArray());
+    }
+
+    @Test
+    public void shouldAddSubCollectionsWhenInsertingMultipleValuesWithoutIds() {
+        String query = "INSERT INTO CitiesT (parent_id, city_name, test) " +
+                "VALUES ('8B29ww4lnHkrbWL0XH10', 'A', true), ('8B29ww4lnHkrbWL0XH10', 'B', true), ('8B29ww4lnHkrbWL0XH10', 'C', true)";
+        int rowsAffected = template.update(query);
+        assertEquals(3, rowsAffected);
+        List<Map<String, Object>> select = template.queryForList("SELECT city_name, parent_id FROM CitiesT WHERE parent_id = '8B29ww4lnHkrbWL0XH10'");
+        assertArrayEquals(new String[]{"A", "B", "C"}, select.stream().map(m -> m.get("city_name")).sorted().toArray());
+    }
+
+    @Test(expected = UncategorizedSQLException.class)
+    public void shouldThrowExceptionWhenInsertingToSubCollectionWithoutParentId() {
+        String query = "INSERT INTO CitiesT (city_name, test) VALUES ('A', true), ('B', true), ('C', true)";
+        template.update(query);
     }
 }
