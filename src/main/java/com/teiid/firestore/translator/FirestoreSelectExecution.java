@@ -19,27 +19,26 @@
 package com.teiid.firestore.translator;
 
 
-import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.FieldPath;
-import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.teiid.firestore.connection.FirestoreConnection;
 import com.teiid.firestore.translator.appenders.WhereProcessor;
-import org.teiid.language.*;
+import com.teiid.firestore.translator.common.FirestoreCommand;
+import org.teiid.language.ColumnReference;
+import org.teiid.language.NamedTable;
+import org.teiid.language.Select;
 import org.teiid.logging.LogConstants;
 import org.teiid.logging.LogManager;
-import org.teiid.metadata.Column;
 import org.teiid.translator.DataNotAvailableException;
 import org.teiid.translator.ResultSetExecution;
 import org.teiid.translator.TranslatorException;
 
-import java.util.*;
+import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.google.cloud.firestore.Query.Direction.ASCENDING;
-import static com.google.cloud.firestore.Query.Direction.DESCENDING;
 import static com.teiid.firestore.translator.common.TranslatorUtils.*;
 
 
@@ -47,103 +46,31 @@ import static com.teiid.firestore.translator.common.TranslatorUtils.*;
  * Represents the execution of a command.
  */
 public class FirestoreSelectExecution implements ResultSetExecution {
-    private Select command;
-    private FirestoreConnection connection;
-    private WhereProcessor whereProcessor;
+    private FirestoreExecution firestoreExecution;
     private Iterator<QueryDocumentSnapshot> results;
     private String[] fields;
 
-    FirestoreSelectExecution(Select query, FirestoreConnection firestoreConnection, WhereProcessor whereProcessor) {
-        this.command = query;
-        this.connection = firestoreConnection;
-        this.whereProcessor = whereProcessor;
-        this.fields = fields();
+    FirestoreSelectExecution(Select command, FirestoreConnection firestoreConnection, WhereProcessor whereProcessor) {
+        this.fields = fields(command);
+        FirestoreCommand firestoreCommand = new FirestoreCommand(
+                (NamedTable) command.getFrom().get(0),
+                command.getWhere(),
+                command.getLimit(),
+                command.getOrderBy(),
+                fields);
+        this.firestoreExecution = new FirestoreExecution(firestoreConnection, whereProcessor, firestoreCommand);
     }
 
     @Override
     public void execute() throws TranslatorException {
-        String collectionName = nameInSource((MetadataReference) command.getFrom().get(0));
-        Optional<Column> parentIdColumnMetadata = parentIdColumnMetadata((NamedTable) command.getFrom().get(0));
         try {
-            results = parentIdColumnMetadata.isPresent() ?
-                    executeSubCollectionSelect(collectionName, parentCollectionName(parentIdColumnMetadata.get())) :
-                    executeRootCollectionSelect(collectionName);
+            results = firestoreExecution.execute().iterator();
         } catch (ExecutionException | InterruptedException e) {
             throw new TranslatorException(e);
         }
     }
 
-    private Iterator<QueryDocumentSnapshot> executeRootCollectionSelect(String collectionName) throws TranslatorException, ExecutionException, InterruptedException {
-        return executeCollectionSelect(connection.collection(collectionName), fields);
-    }
-
-    private Iterator<QueryDocumentSnapshot> executeSubCollectionSelect(String collectionName, String parentCollectionName) throws TranslatorException, ExecutionException, InterruptedException {
-        String[] filteredFields = Arrays.stream(fields)
-                .filter(field -> !field.endsWith(PARENT_ID_SUFFIX))
-                .toArray(String[]::new);
-
-        String parentIdEqualityExpressionValue = whereProcessor.getParentIdEqualityExpressionValue(command.getWhere());
-        return parentIdEqualityExpressionValue != null ?
-                executeSingleSubCollectionSelect(collectionName, parentCollectionName, filteredFields, parentIdEqualityExpressionValue) :
-                executeSubCollectionGroupSelect(collectionName, filteredFields);
-    }
-
-    private Iterator<QueryDocumentSnapshot> executeSingleSubCollectionSelect(String collectionName, String parentCollectionName, String[] filteredFields, String parentIdEqualityExpressionValue) throws TranslatorException, ExecutionException, InterruptedException {
-        CollectionReference subCollection = connection.collection(parentCollectionName).document(parentIdEqualityExpressionValue).collection(collectionName);
-        return executeCollectionSelect(subCollection, filteredFields);
-    }
-
-    private Iterator<QueryDocumentSnapshot> executeSubCollectionGroupSelect(String collectionName, String[] filteredFields) throws TranslatorException, InterruptedException, ExecutionException {
-        Query query = appendQueryCriteria(connection.collectionGroup(collectionName).select(filteredFields));
-        List<QueryDocumentSnapshot> documentSnapshots = new ArrayList<>(query.get().get().getDocuments());
-        Condition where = command.getWhere();
-        if (where != null) {
-            whereProcessor.filterCollectionGroup(documentSnapshots, where);
-        }
-        Limit limit = command.getLimit();
-        if (limit != null) {
-            documentSnapshots = documentSnapshots.stream().limit(limit.getRowLimit()).collect(Collectors.toList());
-        }
-        return documentSnapshots.iterator();
-    }
-
-    private Iterator<QueryDocumentSnapshot> executeCollectionSelect(CollectionReference collectionReference, String[] fieldsToSelect) throws TranslatorException, ExecutionException, InterruptedException {
-        Query query = appendQueryCriteria(collectionReference.select(fieldsToSelect));
-        Limit limit = command.getLimit();
-        if (limit != null) {
-            query = appendLimit(query, limit);
-        }
-        return Objects.requireNonNull(query).get().get().getDocuments().iterator();
-    }
-
-    private Query appendQueryCriteria(Query query) throws TranslatorException {
-        Condition where = command.getWhere();
-        if (where != null) {
-            query = whereProcessor.appendWhere(query, where);
-        }
-
-        OrderBy orderBy = command.getOrderBy();
-        if (orderBy != null) {
-            query = appendOrderBy(query, orderBy);
-        }
-        return query;
-    }
-
-    private Query appendOrderBy(Query query, OrderBy orderBy) throws TranslatorException {
-        for (SortSpecification sortSpecification : orderBy.getSortSpecifications()) {
-            String field = nameInSource((MetadataReference) sortSpecification.getExpression());
-            if (field.endsWith(PARENT_ID_SUFFIX)) throw new TranslatorException("Ordering by parentId isn't supported");
-            String ordering = sortSpecification.getOrdering().toString();
-            query = query.orderBy(field, ordering.equals("DESC") ? DESCENDING : ASCENDING);
-        }
-        return query;
-    }
-
-    private Query appendLimit(Query query, Limit limit) {
-        return query.limit(limit.getRowLimit());
-    }
-
-    private String[] fields() {
+    private String[] fields(Select command) {
         return command.getDerivedColumns().stream()
                 .map(derivedColumn -> nameInSource((ColumnReference) derivedColumn.getExpression()))
                 .toArray(String[]::new);

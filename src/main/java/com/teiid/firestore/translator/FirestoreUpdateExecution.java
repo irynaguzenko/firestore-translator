@@ -1,9 +1,12 @@
 package com.teiid.firestore.translator;
 
 import com.google.api.core.ApiFuture;
-import com.google.cloud.firestore.*;
+import com.google.cloud.firestore.CollectionReference;
+import com.google.cloud.firestore.WriteBatch;
+import com.google.cloud.firestore.WriteResult;
 import com.teiid.firestore.connection.FirestoreConnection;
 import com.teiid.firestore.translator.appenders.WhereProcessor;
+import com.teiid.firestore.translator.common.FirestoreCommand;
 import com.teiid.firestore.translator.common.TranslatorUtils;
 import org.teiid.language.*;
 import org.teiid.metadata.Column;
@@ -16,6 +19,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.google.cloud.firestore.FieldPath.documentId;
 import static com.teiid.firestore.translator.common.TranslatorUtils.*;
 
 public class FirestoreUpdateExecution implements UpdateExecution {
@@ -35,10 +39,10 @@ public class FirestoreUpdateExecution implements UpdateExecution {
     public void execute() throws TranslatorException {
         WriteBatch batch = connection.batch();
         List<WriteResult> writeResults = getWriteResults(batch);
-        if (command instanceof Update) {
-            updateCounts.add(writeResults.size());
-        } else {
+        if (command instanceof Insert) {
             writeResults.forEach(result -> updateCounts.add(1));
+        } else {
+            updateCounts.add(writeResults.size());
         }
     }
 
@@ -99,18 +103,14 @@ public class FirestoreUpdateExecution implements UpdateExecution {
     }
 
     private void executeDelete(Delete delete, WriteBatch batch) throws ExecutionException, InterruptedException, TranslatorException {
-        selectDocuments(delete.getTable(), delete.getWhere())
-                .forEach(snapshot -> batch.delete(snapshot.getReference()));
+        FirestoreExecution firestoreExecution = new FirestoreExecution(connection, whereProcessor, new FirestoreCommand(delete.getTable(), delete.getWhere()));
+        firestoreExecution.execute().forEach(snapshot -> batch.delete(snapshot.getReference()));
     }
 
     private void executeUpdate(Update update, WriteBatch batch) throws TranslatorException, ExecutionException, InterruptedException {
+        FirestoreExecution firestoreExecution = new FirestoreExecution(connection, whereProcessor, new FirestoreCommand(update.getTable(), update.getWhere()));
         Map<String, Object> changes = toMap(update.getChanges());
-        selectDocuments(update.getTable(), update.getWhere())
-                .forEach(snapshot -> batch.update(snapshot.getReference(), changes));
-    }
-
-    private String nameInSource(MetadataReference reference) {
-        return reference.getMetadataObject().getNameInSource();
+        firestoreExecution.execute().forEach(snapshot -> batch.update(snapshot.getReference(), changes));
     }
 
     private List<?> getSingleInsertParams(Insert insert) {
@@ -122,7 +122,7 @@ public class FirestoreUpdateExecution implements UpdateExecution {
 
     private void setDocument(CollectionReference collection, List<ColumnReference> columns, WriteBatch batch, List<?> parameters) {
         Map<String, Object> fieldValues = getFieldValues(columns, parameters);
-        Optional<String> documentId = Optional.ofNullable((String) fieldValues.remove(FieldPath.documentId().toString()));
+        Optional<String> documentId = Optional.ofNullable((String) fieldValues.remove(documentId().toString()));
         batch.set(documentId.map(collection::document).orElseGet(collection::document), fieldValues);
     }
 
@@ -143,11 +143,6 @@ public class FirestoreUpdateExecution implements UpdateExecution {
             return new AbstractMap.SimpleEntry<>(fieldParts[0], Map.of(nestedEntry.getKey(), nestedEntry.getValue()));
         }
         return new AbstractMap.SimpleEntry<>(fieldName, value);
-    }
-
-    private List<QueryDocumentSnapshot> selectDocuments(NamedTable table, Condition where) throws InterruptedException, ExecutionException, TranslatorException {
-        CollectionReference collection = connection.collection(nameInSource(table));
-        return whereProcessor.appendWhere(collection, where).get().get().getDocuments();
     }
 
     private Map<String, Object> toMap(List<SetClause> changes) {

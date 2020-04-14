@@ -24,11 +24,10 @@ public class FirestoreInsertTranslatorTest {
 
     @After
     public void deleteCreated() {
-        String query = "DELETE from CountriesT WHERE test";
-        template.update(query);
-//        TODO: Delete from sub-collections. Sequential test flow fails
-//        String query = "DELETE from CitiesT WHERE test";
-//        template.update(query);
+        String deleteCountries = "DELETE from CountriesT WHERE test";
+        template.update(deleteCountries);
+        String deleteCities = "DELETE from CitiesT WHERE test";
+        template.update(deleteCities);
     }
 
     @Test

@@ -47,4 +47,14 @@ public class FirestoreUpdateTranslatorTest {
         List<Map<String, Object>> result = template.queryForList("SELECT country_name FROM CountriesT WHERE country_area = 0");
         assertArrayEquals(new String[]{"Jamaica", "Japan"}, result.stream().map(m -> m.get("country_name")).sorted().toArray());
     }
+
+    @Test
+    public void shouldUpdateMultipleFieldsWhenUpdatingSubCollectionWithParentId() {
+        String insert = "INSERT INTO CitiesT (city_name, parent_id, test) VALUES ('Milan', '8B29ww4lnHkrbWL0XH10', true), ('Rome', '8B29ww4lnHkrbWL0XH10', true)";
+        template.update(insert);
+        String update = "UPDATE CitiesT SET city_name = 'Unknown' WHERE parent_id = '8B29ww4lnHkrbWL0XH10'";
+        assertEquals(2, template.update(update));
+        List<Map<String, Object>> result = template.queryForList("SELECT * FROM CitiesT WHERE parent_id = '8B29ww4lnHkrbWL0XH10'");
+        assertArrayEquals(new String[]{"Unknown"}, result.stream().map(m -> m.get("city_name")).distinct().toArray());
+    }
 }
