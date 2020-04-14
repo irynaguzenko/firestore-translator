@@ -67,14 +67,14 @@ public class FirestoreSelectTranslatorTest {
 
     @Test
     public void shouldReturnFilteredDocumentWhenSelectingWithArrayContainsCondition() {
-        String query = "SELECT * FROM CountriesT WHERE array_contains(country_languages, 'Spanish') = true";
+        String query = "SELECT * FROM CountriesT WHERE array_contains(country_languages, 'Spanish')";
         List<Map<String, Object>> result = template.queryForList(query);
         assertArrayEquals(new String[]{"Spain", "TestOrder"}, result.stream().map(m -> m.get("country_name")).sorted().toArray());
     }
 
     @Test
     public void shouldReturnFilteredDocumentWhenSelectingWithArrayContainsAnyCondition() {
-        String query = "SELECT * FROM CountriesT WHERE array_contains_any(country_languages, ARRAY['Ukrainian', 'Catalan']) = true";
+        String query = "SELECT * FROM CountriesT WHERE array_contains_any(country_languages, ARRAY['Ukrainian', 'Catalan'])";
         List<Map<String, Object>> result = template.queryForList(query);
         assertArrayEquals(new String[]{"Spain", "Ukraine"}, result.stream().map(m -> m.get("country_name")).sorted().toArray());
     }
