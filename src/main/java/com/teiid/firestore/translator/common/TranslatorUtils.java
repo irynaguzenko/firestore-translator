@@ -2,6 +2,8 @@ package com.teiid.firestore.translator.common;
 
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import org.apache.commons.lang3.StringUtils;
+import org.teiid.language.Expression;
+import org.teiid.language.Literal;
 import org.teiid.language.MetadataReference;
 import org.teiid.language.NamedTable;
 import org.teiid.metadata.Column;
@@ -28,5 +30,9 @@ public class TranslatorUtils {
 
     public static String parentCollectionName(Column parentIdColumn) {
         return parentIdColumn.getNameInSource().replace(PARENT_ID_SUFFIX, StringUtils.EMPTY);
+    }
+
+    public static Object literal(Expression e) {
+        return ((Literal) e).getValue();
     }
 }

@@ -13,6 +13,7 @@ CREATE FOREIGN TABLE CountriesT (
                 president_name varchar (255) OPTIONS (NAMEINSOURCE 'power.president.name'),
                 right_side_driving boolean OPTIONS (NAMEINSOURCE 'right-side-driving'),
                 country_capital varchar (255) OPTIONS (NAMEINSOURCE 'capital'),
+                country_languages varchar[] OPTIONS (NAMEINSOURCE 'languages'),
                 country_area double OPTIONS (NAMEINSOURCE 'area'),
                 test boolean OPTIONS (NAMEINSOURCE 'test'),
                 int_array integer[] OPTIONS (NAMEINSOURCE 'intArray'),

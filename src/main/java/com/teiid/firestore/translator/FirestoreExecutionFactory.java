@@ -30,14 +30,26 @@ import org.teiid.metadata.RuntimeMetadata;
 import org.teiid.translator.*;
 
 import javax.resource.cci.ConnectionFactory;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+import static org.teiid.translator.TypeFacility.RUNTIME_NAMES.BOOLEAN;
+import static org.teiid.translator.TypeFacility.RUNTIME_NAMES.STRING;
 
 @Translator(name = "firestore", description = "Firestore custom translator")
 public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactory, FirestoreConnection> {
     private WhereProcessor whereProcessor;
+    private static final String FIRESTORE = "firestore";
+    private static final String ARRAY_CONTAINS = "array_contains";
+    private static final String STRING_ARRAY = "string[]";
+    private static final String ARRAY_CONTAINS_ANY = "array_contains_any";
 
     @Override
     public void start() throws TranslatorException {
         super.start();
+        addPushDownFunction(FIRESTORE, ARRAY_CONTAINS, BOOLEAN, STRING_ARRAY, STRING);
+        addPushDownFunction(FIRESTORE, ARRAY_CONTAINS_ANY, BOOLEAN, STRING_ARRAY, STRING_ARRAY);
         whereProcessor = new WhereProcessor();
         LogManager.logTrace(LogConstants.CTX_CONNECTOR, "Firestore ExecutionFactory Started");
     }
@@ -50,6 +62,14 @@ public class FirestoreExecutionFactory extends ExecutionFactory<ConnectionFactor
     @Override
     public UpdateExecution createUpdateExecution(Command command, ExecutionContext executionContext, RuntimeMetadata metadata, FirestoreConnection connection) throws TranslatorException {
         return new FirestoreUpdateExecution((BulkCommand) command, connection, whereProcessor);
+    }
+
+    @Override
+    public List<String> getSupportedFunctions() {
+        List<String> supportedFunctions = Optional.ofNullable(super.getSupportedFunctions()).orElseGet(ArrayList::new);
+        supportedFunctions.add(ARRAY_CONTAINS);
+        supportedFunctions.add(ARRAY_CONTAINS_ANY);
+        return supportedFunctions;
     }
 
     public boolean supportsCompareCriteriaEquals() {

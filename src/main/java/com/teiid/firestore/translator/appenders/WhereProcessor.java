@@ -2,6 +2,7 @@ package com.teiid.firestore.translator.appenders;
 
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
+import com.teiid.firestore.translator.common.TranslatorUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.teiid.language.*;
 import org.teiid.translator.TranslatorException;
@@ -42,11 +43,15 @@ public class WhereProcessor {
             }
         } else if (where instanceof Comparison) {
             Comparison comparison = (Comparison) where;
-            String leftExpression = fieldName(comparison.getLeftExpression());
-            if (isParentId(leftExpression)) return query;
+            Expression leftExpression = comparison.getLeftExpression();
+            if (leftExpression instanceof Function) {
+                return appendFunctionComparison(query, comparison, (Function) leftExpression);
+            }
+            String fieldLeftExpression = fieldName(leftExpression);
+            if (isParentId(fieldLeftExpression)) return query;
             Object rightExpression = rightValue(comparison);
             Comparison.Operator operator = valueOf(comparison.getOperator().name());
-            return queryComparisons.get(operator).apply(query, Pair.of(leftExpression, rightExpression));
+            return queryComparisons.get(operator).apply(query, Pair.of(fieldLeftExpression, rightExpression));
         } else if (where instanceof In) {
             In in = (In) where;
             String leftExpression = fieldName(in.getLeftExpression());
@@ -77,7 +82,8 @@ public class WhereProcessor {
             }
         } else if (where instanceof Comparison) {
             Comparison comparison = (Comparison) where;
-            if (isNotParentId(comparison.getLeftExpression())) return;
+            Expression leftExpression = comparison.getLeftExpression();
+            if (leftExpression instanceof Function || isNotParentId(leftExpression)) return;
             String rightExpression = (String) rightValue(comparison);
             Comparison.Operator operator = valueOf(comparison.getOperator().name());
             documents.removeIf(document -> !documentIdComparisons.get(operator).apply(parentId(document), rightExpression));
@@ -111,22 +117,40 @@ public class WhereProcessor {
             }
         } else if (where instanceof Comparison) {
             Comparison comparison = (Comparison) where;
-            String leftExpression = fieldName(comparison.getLeftExpression());
-            return isParentId(leftExpression) && EQ.equals(comparison.getOperator()) ? (String) rightValue(comparison) : null;
+            Expression leftExpression = comparison.getLeftExpression();
+            if (leftExpression instanceof Function) return null;
+            String fieldName = fieldName(leftExpression);
+            return isParentId(fieldName) && EQ.equals(comparison.getOperator()) ? (String) rightValue(comparison) : null;
         }
         return null;
     }
 
+    private Query appendFunctionComparison(Query query, Comparison comparison, Function function) throws TranslatorException {
+        if (!(Boolean) rightValue(comparison))
+            throw new TranslatorException("Array-contains/array-contains-any cannot be negative");
+        String functionName = function.getName();
+        List<Expression> parameters = function.getParameters();
+        String field = fieldName(parameters.get(0));
+        if (functionName.equals("array_contains")) {
+            return query.whereArrayContains(field, literal(parameters.get(1)));
+        } else if (functionName.equals("array_contains_any")) {
+            List<Object> values = ((Array) parameters.get(1)).getExpressions().stream().map(TranslatorUtils::literal).collect(Collectors.toList());
+            return query.whereArrayContainsAny(field, values);
+        } else {
+            throw new TranslatorException("Unknown function");
+        }
+    }
+
     private Object rightValue(Comparison comparison) {
-        return ((Literal) comparison.getRightExpression()).getValue();
+        return literal(comparison.getRightExpression());
     }
 
     private List<Object> rightValue(In in) {
-        return in.getRightExpressions().stream().map(expression -> ((Literal) expression).getValue()).collect(Collectors.toList());
+        return in.getRightExpressions().stream().map(TranslatorUtils::literal).collect(Collectors.toList());
     }
 
     private String rightValue(Like like) throws TranslatorException {
-        String rightExpression = (String) ((Literal) like.getRightExpression()).getValue();
+        String rightExpression = (String) literal(like.getRightExpression());
         if (!rightExpression.endsWith("%"))
             throw new TranslatorException("Unsupported LIKE expression. Only prefix filtering is allowed");
         return rightExpression.substring(0, rightExpression.length() - 1);

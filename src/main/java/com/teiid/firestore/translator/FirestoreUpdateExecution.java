@@ -4,6 +4,7 @@ import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import com.teiid.firestore.connection.FirestoreConnection;
 import com.teiid.firestore.translator.appenders.WhereProcessor;
+import com.teiid.firestore.translator.common.TranslatorUtils;
 import org.teiid.language.*;
 import org.teiid.metadata.Column;
 import org.teiid.translator.DataNotAvailableException;
@@ -115,7 +116,7 @@ public class FirestoreUpdateExecution implements UpdateExecution {
     private List<?> getSingleInsertParams(Insert insert) {
         return ((ExpressionValueSource) insert.getValueSource()).getValues().stream()
                 .map(v -> v instanceof Literal ? literal(v) :
-                        ((Array) v).getExpressions().stream().map(this::literal).collect(Collectors.toList()))
+                        ((Array) v).getExpressions().stream().map(TranslatorUtils::literal).collect(Collectors.toList()))
                 .collect(Collectors.toList());
     }
 
@@ -153,10 +154,6 @@ public class FirestoreUpdateExecution implements UpdateExecution {
         return changes.stream()
                 .map(change -> new AbstractMap.SimpleEntry<>(nameInSource(change.getSymbol()), literal(change.getValue())))
                 .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
-    }
-
-    private Object literal(Expression e) {
-        return ((Literal) e).getValue();
     }
 
     @Override
